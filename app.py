@@ -277,19 +277,41 @@ if task_name == task_list[0]:
     # Release OpenCV capture and close Streamlit app
     cap.release()
 
-if task_name == task_list[1]:
+# if task_name == task_list[1]:
 
+#     uploaded_file = st.file_uploader("Choose a video file", type=["mp4", "avi", "mkv", "mov"])
+#     if uploaded_file is not None:
+#         name = os.path.join(UPLOADS_DIR, uploaded_file.name)
+#         with open(name, "wb") as f:
+#             f.write(uploaded_file.getbuffer())
+#         # video = uploaded_file.read()
+
+
+#         if st.button("submit"):
+
+#             video_processing(graph, category_index, name)
+if task_name == task_list[1]:
     uploaded_file = st.file_uploader("Choose a video file", type=["mp4", "avi", "mkv", "mov"])
     if uploaded_file is not None:
-        name = os.path.join(UPLOADS_DIR, uploaded_file.name)
-        with open(name, "wb") as f:
-            f.write(uploaded_file.getbuffer())
-        # video = uploaded_file.read()
+        with tempfile.NamedTemporaryFile(suffix=".mp4") as temp_file:
+            temp_file.write(uploaded_file.getvalue())
+            temp_file.seek(0)
 
+            if st.button("Submit"):
+                cap = cv2.VideoCapture(temp_file.name)
 
-        if st.button("submit"):
+                # Streamlit container to display video frames
+                frame_container = st.empty()
 
-            video_processing(graph, category_index, name)
+                while True:
+                    ret, frame = cap.read()  # Read a frame from the video file
+                    if not ret:
+                        break
+                    img = webcam_processing(graph, category_index, frame)  # Process frame using image_processing function4
+                    frame_container.image(img, channels='BGR')  # Display the frame on Streamlit
+
+                # Release OpenCV capture and close Streamlit app
+                cap.release()
 
 if task_name == task_list[2]:
 
