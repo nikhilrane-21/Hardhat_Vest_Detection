@@ -1,36 +1,16 @@
 import os
-import time
-from multiprocessing import Process, Queue, Value
-import queue
 import numpy as np
 import tensorflow.compat.v1 as tf
 tf.disable_v2_behavior()
-# import argparse
-import requests
-from distutils.version import StrictVersion
 import visualization_utils as vis_utils
-import config
-import base64
 import streamlit as st
-from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration, WebRtcMode, WebRtcStreamerContext
-import av
-import threading
 from PIL import Image
 import tempfile
-import logging
-from pathlib import Path
-from typing import Dict, Optional, cast
 import cv2
-from aiortc.contrib.media import MediaPlayer
 
 
 st.set_page_config(page_title="Streamlit Helmet Vest Hardhat Detection Demo", page_icon="🤖")
 
-
-
-RTC_CONFIGURATION = RTCConfiguration(
-    {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
-)
 
 task_list = ["Camera", "Video", "RTSP", "Image"]
 
@@ -122,8 +102,6 @@ def is_wearing_hardhat_vest(hardhat_boxes, vest_boxes, person_box):
     return hardhat_flag, vest_flag
 
 
-
-
 def image_processing(graph, category_index, image):
     # Save the NumPy array as a temporary image file
     with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as temp_file:
@@ -159,20 +137,11 @@ def image_processing(graph, category_index, image):
 
                 return img
 
-class VideoProcessor(VideoProcessorBase):
-    def __init__(self, graph, category_index):
-        self.graph = graph
-        self.category_index = category_index
-
-    def recv(self, frame):
-        img = webcam_processing(self.graph, self.category_index, frame)  # Process frame using image_processing function4
-        return av.VideoFrame.from_ndarray(img, format='bgr24')  # Convert processed image back to a frame
-
 
 def webcam_processing(graph, category_index, frame):
-    img = frame.to_image()  # Convert frame to image
-    img = np.array(img)  # Convert image to NumPy array
-    image_expanded = np.expand_dims(img, axis=0)
+    # img = frame.to_image()  # Convert frame to image
+    img = np.array(frame)  # Convert image to NumPy array
+    image_expanded = np.expand_dims(frame, axis=0)
 
     with graph.as_default():
         ops = tf.get_default_graph().get_operations()
@@ -203,7 +172,6 @@ def webcam_processing(graph, category_index, frame):
 
 
             return frame_rgb
-
 
 
 def video_processing(graph, category_index, name):
@@ -286,21 +254,33 @@ category_index = {1: {'id': 1, 'name': 'hardhat'},
 
 
 if task_name == task_list[0]:
-    def video_processor_factory():
-        return VideoProcessor(graph, category_index)
-    ctx = webrtc_streamer(
-        key="example",
-        video_processor_factory = video_processor_factory,
-        rtc_configuration=RTC_CONFIGURATION,
-        media_stream_constraints={
-            "video": True,
-            "audio": False
-        },
 
-    )
+    cap = cv2.VideoCapture(0)
 
+    # Streamlit button to start camera feed
+    start_button = st.button("Start Processing", key= "start")
 
+    # Streamlit button to stop camera feed
+    stop_button = st.button("Stop Processing", key="stop")
 
+    # Streamlit container to display video frames
+    frame_container = st.empty()
+
+    # Streamlit loop to display live video frames
+    while start_button:
+        ret, frame = cap.read()  # Read a frame from the camera
+        if not ret:
+            break
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # Convert to RGB
+        img = webcam_processing(graph, category_index, frame)  # Process frame using image_processing function4
+
+        frame_container.image(img, channels='RGB')  # Display the frame on Streamlit
+
+        if stop_button:
+            break
+
+    # Release OpenCV capture and close Streamlit app
+    cap.release()
 
 if task_name == task_list[1]:
 
@@ -309,56 +289,42 @@ if task_name == task_list[1]:
         name = os.path.join(UPLOADS_DIR, uploaded_file.name)
         with open(name, "wb") as f:
             f.write(uploaded_file.getbuffer())
-        video = uploaded_file.read()
+        # video = uploaded_file.read()
 
 
         if st.button("submit"):
 
             video_processing(graph, category_index, name)
-            # video_file = open("processed/"+ uploaded_file.name, 'rb')
-            # video_bytes = video_file.read()
-            # st.video(video_bytes)
-
-
-
 
 if task_name == task_list[2]:
 
     rtsp_link = st.text_input("Enter the RTSP link")
     if rtsp_link:
+        cap = cv2.VideoCapture(rtsp_link)
 
-        MEDIAFILES = {
-            rtsp_link: {
-                "url": rtsp_link,
-                "type": "video",
-            },
-        }
-        media_file_info = MEDIAFILES[rtsp_link]
+        # Streamlit button to start camera feed
+        start_button = st.button("Start Processing", key="start")
 
+        # Streamlit button to stop camera feed
+        stop_button = st.button("Stop Processing", key="stop")
 
-        def create_player():
-            return MediaPlayer(media_file_info["url"])
+        # Streamlit container to display video frames
+        frame_container = st.empty()
 
+        # Streamlit loop to display live video frames
+        while start_button:
+            ret, frame = cap.read()  # Read a frame from the camera
+            if not ret:
+                break
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # Convert to RGB
+            img = webcam_processing(graph, category_index, frame)  # Process frame using image_processing function4
 
-        def video_processor_factory():
-            return VideoProcessor(graph, category_index)
+            frame_container.image(img, channels='RGB')  # Display the frame on Streamlit
 
-        webrtc_streamer(
-            key="rtsp",
-            mode=WebRtcMode.RECVONLY,
-            video_processor_factory=video_processor_factory,
-            rtc_configuration=RTC_CONFIGURATION,
-            media_stream_constraints={
-                "video": media_file_info["type"] == "video",
-                "audio": False,
-            },
-            player_factory=create_player,
-            # video_frame_callback=video_frame_callback,
-        )
-
-    # if st.button("Play"):
-    #     display_video_from_rtsp(rtsp_link)
-
+            if stop_button:
+                break
+        # Release OpenCV capture and close Streamlit app
+        cap.release()
 
 if task_name == task_list[3]:
 
