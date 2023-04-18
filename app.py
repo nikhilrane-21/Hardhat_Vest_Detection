@@ -137,41 +137,60 @@ def image_processing(graph, category_index, image):
 
                 return img
 
-
-def webcam_processing(graph, category_index, frame):
+def webcam_processing(category_index, frame, sess, tensor_dict):
     # img = frame.to_image()  # Convert frame to image
     img = np.array(frame)  # Convert image to NumPy array
     image_expanded = np.expand_dims(frame, axis=0)
 
-    with graph.as_default():
-        ops = tf.get_default_graph().get_operations()
-        all_tensor_names = {output.name for op in ops for output in op.outputs}
-        tensor_dict = {}
-        for key in [
-            'num_detections', 'detection_boxes', 'detection_scores',
-            'detection_classes', 'detection_masks'
-        ]:
-            tensor_name = key + ':0'
-            if tensor_name in all_tensor_names:
-                tensor_dict[key] = tf.get_default_graph().get_tensor_by_name(
-                    tensor_name)
-        with tf.Session() as sess:
-            output_dict = run_inference_for_single_image(image_expanded, sess, tensor_dict)
+    output_dict = run_inference_for_single_image(image_expanded, sess, tensor_dict)
 
-            vis_utils.visualize_boxes_and_labels_on_image_array(
-                img,
-                output_dict['detection_boxes'],
-                output_dict['detection_classes'],
-                output_dict['detection_scores'],
-                category_index,
-                instance_masks=output_dict.get('detection_masks'),
-                use_normalized_coordinates=True,
-                line_thickness=4)
-            # Convert the frame to RGB format for display in Streamlit
-            frame_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    vis_utils.visualize_boxes_and_labels_on_image_array(
+        img,
+        output_dict['detection_boxes'],
+        output_dict['detection_classes'],
+        output_dict['detection_scores'],
+        category_index,
+        instance_masks=output_dict.get('detection_masks'),
+        use_normalized_coordinates=True,
+        line_thickness=4)
+    # Convert the frame to RGB format for display in Streamlit
+    frame_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+    return frame_rgb
+# def webcam_processing(graph, category_index, frame):
+#     # img = frame.to_image()  # Convert frame to image
+#     img = np.array(frame)  # Convert image to NumPy array
+#     image_expanded = np.expand_dims(frame, axis=0)
+
+#     with graph.as_default():
+#         ops = tf.get_default_graph().get_operations()
+#         all_tensor_names = {output.name for op in ops for output in op.outputs}
+#         tensor_dict = {}
+#         for key in [
+#             'num_detections', 'detection_boxes', 'detection_scores',
+#             'detection_classes', 'detection_masks'
+#         ]:
+#             tensor_name = key + ':0'
+#             if tensor_name in all_tensor_names:
+#                 tensor_dict[key] = tf.get_default_graph().get_tensor_by_name(
+#                     tensor_name)
+#         with tf.Session() as sess:
+#             output_dict = run_inference_for_single_image(image_expanded, sess, tensor_dict)
+
+#             vis_utils.visualize_boxes_and_labels_on_image_array(
+#                 img,
+#                 output_dict['detection_boxes'],
+#                 output_dict['detection_classes'],
+#                 output_dict['detection_scores'],
+#                 category_index,
+#                 instance_masks=output_dict.get('detection_masks'),
+#                 use_normalized_coordinates=True,
+#                 line_thickness=4)
+#             # Convert the frame to RGB format for display in Streamlit
+#             frame_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
 
-            return frame_rgb
+#             return frame_rgb
 
 
 def video_processing(graph, category_index, name):
@@ -290,6 +309,30 @@ if task_name == task_list[0]:
 #         if st.button("submit"):
 
 #             video_processing(graph, category_index, name)
+# if task_name == task_list[1]:
+#     uploaded_file = st.file_uploader("Choose a video file", type=["mp4", "avi", "mkv", "mov"])
+#     if uploaded_file is not None:
+#         with tempfile.NamedTemporaryFile(suffix=".mp4") as temp_file:
+#             temp_file.write(uploaded_file.getvalue())
+#             temp_file.seek(0)
+
+#             if st.button("Submit"):
+#                 cap = cv2.VideoCapture(temp_file.name)
+
+#                 # Streamlit container to display video frames
+#                 frame_container = st.empty()
+
+#                 while True:
+#                     ret, frame = cap.read()  # Read a frame from the video file
+#                     if not ret:
+#                         break
+#                     img = webcam_processing(graph, category_index, frame)  # Process frame using image_processing function4
+#                     frame_container.image(img, channels='BGR')  # Display the frame on Streamlit
+
+#                 # Release OpenCV capture and close Streamlit app
+#                 cap.release()
+
+
 if task_name == task_list[1]:
     uploaded_file = st.file_uploader("Choose a video file", type=["mp4", "avi", "mkv", "mov"])
     if uploaded_file is not None:
@@ -303,16 +346,30 @@ if task_name == task_list[1]:
                 # Streamlit container to display video frames
                 frame_container = st.empty()
 
-                while True:
-                    ret, frame = cap.read()  # Read a frame from the video file
-                    if not ret:
-                        break
-                    img = webcam_processing(graph, category_index, frame)  # Process frame using image_processing function4
-                    frame_container.image(img, channels='BGR')  # Display the frame on Streamlit
+                # Create TensorFlow session outside the loop
+                with tf.Session(graph=graph) as sess:
+                    ops = graph.get_operations()
+                    all_tensor_names = {output.name for op in ops for output in op.outputs}
+                    tensor_dict = {}
+                    for key in [
+                        'num_detections', 'detection_boxes', 'detection_scores',
+                        'detection_classes', 'detection_masks'
+                    ]:
+                        tensor_name = key + ':0'
+                        if tensor_name in all_tensor_names:
+                            tensor_dict[key] = graph.get_tensor_by_name(tensor_name)
 
-                # Release OpenCV capture and close Streamlit app
-                cap.release()
+                    while True:
+                        ret, frame = cap.read()  # Read a frame from the video file
+                        if not ret:
+                            break
+                        img = webcam_processing(category_index, frame, sess, tensor_dict)  # Process frame using image_processing function4
+                        frame_container.image(img, channels='RGB')  # Display the frame on Streamlit
 
+                    # Release OpenCV capture and close Streamlit app
+                    cap.release()
+                    
+                    
 if task_name == task_list[2]:
 
     rtsp_link = st.text_input("Enter the RTSP link")
