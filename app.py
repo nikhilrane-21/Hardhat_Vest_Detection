@@ -181,11 +181,6 @@ def video_processing(graph, category_index, name):
     fps = int(cap.get(cv2.CAP_PROP_FPS))
     frame_size = (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
 
-    # Define the output video writer
-    fourcc = cv2.VideoWriter_fourcc(*'H264')  # Change the codec to H264
-    output_file = "processed/" + uploaded_file.name
-    out = cv2.VideoWriter(output_file, fourcc, fps, (frame_size[0], frame_size[1]))
-
     with graph.as_default():
         print("video_processing:", "default tensorflow graph")
         ops = tf.get_default_graph().get_operations()
@@ -202,6 +197,7 @@ def video_processing(graph, category_index, name):
         with tf.Session() as sess:
             print("video_processing:", "tensorflow session")
             frame_counter = 0
+            container = st.empty()
             while True:
                 ret, frame = cap.read()
                 if not ret:
@@ -222,14 +218,13 @@ def video_processing(graph, category_index, name):
                     use_normalized_coordinates=True,
                     line_thickness=4)
 
-                # Write the processed frame to the output video
-                out.write(frame)
+                # Update the container with the processed frame
+                container.image(frame, channels="BGR")
 
             cap.release()
-            out.release()  # Release the VideoWriter object
 
-    # Display the saved video using streamlit
-    st.video(output_file)
+    # Indicate end of video
+    st.write("End of video")
 
 
 
