@@ -255,7 +255,7 @@ category_index = {1: {'id': 1, 'name': 'hardhat'},
 
 if task_name == task_list[0]:
 
-    cap = cv2.VideoCapture("/dev/video1")
+    cap = cv2.VideoCapture(1)
 
     # Streamlit button to start camera feed
     start_button = st.button("Start Processing", key= "start")
